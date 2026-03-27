@@ -19,6 +19,33 @@ final class Organization extends Model
     use HasFactory;
     use SoftDeletes;
 
+    /**
+     * Generate a unique slug, checking against soft-deleted records too.
+     */
+    public static function generateUniqueSlug(string $name, ?int $excludeId = null, int $maxRetries = 10): string
+    {
+        $slug = Str::slug($name);
+        $originalSlug = $slug;
+        $counter = 0;
+
+        while ($counter <= $maxRetries) {
+            $query = static::withTrashed()->where('slug', $slug);
+
+            if ($excludeId) {
+                $query->where('id', '!=', $excludeId);
+            }
+
+            if (!$query->exists()) {
+                return $slug;
+            }
+
+            $counter++;
+            $slug = $originalSlug.'-'.$counter;
+        }
+
+        return $originalSlug.'-'.Str::random(6);
+    }
+
     protected $fillable = [
         'name',
         'slug',
@@ -111,25 +138,9 @@ final class Organization extends Model
             }
 
             if (empty($organization->slug)) {
-                $organization->slug = self::generateUniqueSlug(Str::slug($organization->name));
+                $organization->slug = self::generateUniqueSlug($organization->name);
             }
         });
-    }
-
-    /**
-     * Generate a unique slug, appending a counter if necessary.
-     */
-    private static function generateUniqueSlug(string $slug): string
-    {
-        $originalSlug = $slug;
-        $counter = 1;
-
-        while (self::withTrashed()->where('slug', $slug)->exists()) {
-            $slug = $originalSlug.'-'.$counter;
-            $counter++;
-        }
-
-        return $slug;
     }
 
     protected static function newFactory(): OrganizationFactory

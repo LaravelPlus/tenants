@@ -5,12 +5,16 @@ declare(strict_types=1);
 namespace LaravelPlus\Tenants;
 
 use App\Support\AdminNavigation;
+use Illuminate\Cache\RateLimiting\Limit;
+use Illuminate\Http\Request;
+use Illuminate\Support\Facades\RateLimiter;
 use Illuminate\Support\ServiceProvider;
 use LaravelPlus\Tenants\Contracts\OrganizationRepositoryInterface;
 use LaravelPlus\Tenants\Contracts\OrganizationServiceInterface;
 use LaravelPlus\Tenants\Repositories\OrganizationRepository;
 use LaravelPlus\Tenants\Services\OrganizationService;
 use LaravelPlus\Tenants\Services\TenantSettingsService;
+use LaravelPlus\Tenants\Support\CurrentOrganizationResolver;
 
 final class TenantsServiceProvider extends ServiceProvider
 {
@@ -27,6 +31,8 @@ final class TenantsServiceProvider extends ServiceProvider
         $this->app->singleton(OrganizationService::class, fn ($app) => $app->make(OrganizationServiceInterface::class));
 
         $this->app->singleton(TenantSettingsService::class);
+
+        $this->app->singleton(CurrentOrganizationResolver::class);
     }
 
     public function boot(): void
@@ -36,6 +42,7 @@ final class TenantsServiceProvider extends ServiceProvider
         $this->registerRoutes();
         $this->registerCommands();
         $this->registerAdminNavigation();
+        $this->registerRateLimiters();
     }
 
     private function registerPublishing(): void
@@ -108,6 +115,13 @@ final class TenantsServiceProvider extends ServiceProvider
         }
     }
 
+    private function registerRateLimiters(): void
+    {
+        RateLimiter::for('invitations', function (Request $request) {
+            return Limit::perMinute(10)->by($request->user()?->id ?: $request->ip());
+        });
+    }
+
     private function registerAdminNavigation(): void
     {
         $this->callAfterResolving(AdminNavigation::class, function (AdminNavigation $nav): void {
@@ -131,6 +145,7 @@ final class TenantsServiceProvider extends ServiceProvider
             OrganizationServiceInterface::class,
             OrganizationService::class,
             TenantSettingsService::class,
+            CurrentOrganizationResolver::class,
         ];
     }
 }

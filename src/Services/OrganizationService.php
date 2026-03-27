@@ -10,6 +10,7 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 use LaravelPlus\Tenants\Contracts\OrganizationRepositoryInterface;
 use LaravelPlus\Tenants\Contracts\OrganizationServiceInterface;
+use LaravelPlus\Tenants\Support\CurrentOrganizationResolver;
 use LaravelPlus\Tenants\Events\MemberAdded;
 use LaravelPlus\Tenants\Events\MemberRemoved;
 use LaravelPlus\Tenants\Events\MemberRoleChanged;
@@ -88,34 +89,39 @@ final class OrganizationService implements OrganizationServiceInterface
         ], $userId);
     }
 
-    public function addMember(Organization $organization, int $userId, string $role = 'member'): void
+    public function addMember(Organization $organization, User|int $user, string $role = 'member'): void
     {
         $maxMembers = (int) config('tenants.max_members_per_organization', 0);
         if ($maxMembers > 0 && $organization->members()->count() >= $maxMembers) {
             throw new RuntimeException('Organization has reached its member limit.');
         }
 
-        $user = User::findOrFail($userId);
+        $user = $this->resolveUser($user);
         $organization->addMember($user, $role);
 
         event(new MemberAdded($organization, $user, $role));
     }
 
-    public function removeMember(Organization $organization, int $userId): void
+    public function removeMember(Organization $organization, User|int $user): void
     {
-        $user = User::findOrFail($userId);
+        $user = $this->resolveUser($user);
         $organization->removeMember($user);
 
         event(new MemberRemoved($organization, $user));
     }
 
-    public function changeMemberRole(Organization $organization, int $userId, string $role): void
+    public function changeMemberRole(Organization $organization, User|int $user, string $role): void
     {
-        $user = User::findOrFail($userId);
+        $user = $this->resolveUser($user);
         $oldRole = $organization->getMemberRole($user) ?? 'member';
         $organization->changeMemberRole($user, $role);
 
         event(new MemberRoleChanged($organization, $user, $oldRole, $role));
+    }
+
+    private function resolveUser(User|int $user): User
+    {
+        return $user instanceof User ? $user : User::findOrFail($user);
     }
 
     public function switchOrganization(int $userId, Organization $organization): void
@@ -124,7 +130,7 @@ final class OrganizationService implements OrganizationServiceInterface
             throw new RuntimeException('User is not a member of this organization.');
         }
 
-        session()->put('current_organization_id', $organization->id);
+        app(CurrentOrganizationResolver::class)->set($organization->id);
 
         if (function_exists('setPermissionsTeamId')) {
             setPermissionsTeamId($organization->id);

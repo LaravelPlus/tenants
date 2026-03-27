@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace LaravelPlus\Tenants\Services;
 
 use App\Models\User;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Facades\Notification;
 use LaravelPlus\Tenants\Events\InvitationAccepted;
@@ -32,13 +33,16 @@ final class InvitationService
             throw new RuntimeException('An active invitation already exists for this email.');
         }
 
-        $invitation = $organization->invitations()->create([
-            'email' => $email,
-            'role' => $role,
-            'invited_by' => $invitedById,
-            'expires_at' => now()->addHours((int) config('tenants.invitation_expiry_hours', 72)),
-        ]);
+        $invitation = DB::transaction(function () use ($organization, $email, $role, $invitedById): OrganizationInvitation {
+            return $organization->invitations()->create([
+                'email' => $email,
+                'role' => $role,
+                'invited_by' => $invitedById,
+                'expires_at' => now()->addHours((int) config('tenants.invitation_expiry_hours', 72)),
+            ]);
+        });
 
+        // Send mail after commit to avoid sending if transaction fails
         Mail::to($email)->send(new OrganizationInvitationMail($invitation));
 
         $existingUser = User::where('email', $email)->first();
@@ -63,8 +67,10 @@ final class InvitationService
 
         $user = User::where('email', $invitation->email)->firstOrFail();
 
-        $invitation->accept();
-        $invitation->organization->addMember($user, $invitation->role);
+        DB::transaction(function () use ($invitation, $user): void {
+            $invitation->accept();
+            $invitation->organization->addMember($user, $invitation->role);
+        });
 
         event(new InvitationAccepted($invitation));
         event(new MemberAdded($invitation->organization, $user, $invitation->role));

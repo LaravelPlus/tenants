@@ -5,13 +5,14 @@ declare(strict_types=1);
 namespace LaravelPlus\Tenants\Mail;
 
 use Illuminate\Bus\Queueable;
+use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Mail\Mailable;
 use Illuminate\Mail\Mailables\Content;
 use Illuminate\Mail\Mailables\Envelope;
 use Illuminate\Queue\SerializesModels;
 use LaravelPlus\Tenants\Models\OrganizationInvitation;
 
-final class OrganizationInvitationMail extends Mailable
+final class OrganizationInvitationMail extends Mailable implements ShouldQueue
 {
     use Queueable;
     use SerializesModels;

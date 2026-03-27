@@ -7,6 +7,7 @@ namespace LaravelPlus\Tenants\Repositories;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Pagination\LengthAwarePaginator;
+use Illuminate\Support\Facades\Cache;
 use LaravelPlus\Tenants\Contracts\OrganizationRepositoryInterface;
 use LaravelPlus\Tenants\Models\Organization;
 
@@ -31,7 +32,7 @@ final class OrganizationRepository implements OrganizationRepositoryInterface
 
     public function findBySlug(string $slug): ?Organization
     {
-        return $this->query()->where('slug', $slug)->first();
+        return Cache::remember("org:slug:{$slug}", 300, fn () => $this->query()->where('slug', $slug)->first());
     }
 
     public function findByUuid(string $uuid): ?Organization
@@ -46,13 +47,21 @@ final class OrganizationRepository implements OrganizationRepositoryInterface
 
     public function update(Organization $organization, array $data): Organization
     {
+        $oldSlug = $organization->slug;
         $organization->update($data);
+
+        Cache::forget("org:slug:{$oldSlug}");
+        if (isset($data['slug']) && $data['slug'] !== $oldSlug) {
+            Cache::forget("org:slug:{$data['slug']}");
+        }
 
         return $organization->fresh();
     }
 
     public function delete(Organization $organization): bool
     {
+        Cache::forget("org:slug:{$organization->slug}");
+
         return (bool) $organization->delete();
     }
 

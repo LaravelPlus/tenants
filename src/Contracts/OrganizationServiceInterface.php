@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace LaravelPlus\Tenants\Contracts;
 
+use App\Models\User;
 use Illuminate\Pagination\LengthAwarePaginator;
 use LaravelPlus\Tenants\Models\Organization;
 
@@ -19,11 +20,11 @@ interface OrganizationServiceInterface
 
     public function createPersonalOrganization(int $userId, string $userName): Organization;
 
-    public function addMember(Organization $organization, int $userId, string $role = 'member'): void;
+    public function addMember(Organization $organization, User|int $user, string $role = 'member'): void;
 
-    public function removeMember(Organization $organization, int $userId): void;
+    public function removeMember(Organization $organization, User|int $user): void;
 
-    public function changeMemberRole(Organization $organization, int $userId, string $role): void;
+    public function changeMemberRole(Organization $organization, User|int $user, string $role): void;
 
     public function switchOrganization(int $userId, Organization $organization): void;
 }

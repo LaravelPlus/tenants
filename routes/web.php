@@ -24,12 +24,16 @@ Route::middleware(['web', 'auth'])
         Route::get('invitations/{token}/accept', [InvitationController::class, 'show'])
             ->name('invitations.show');
         Route::post('invitations/{token}/accept', [InvitationController::class, 'accept'])
+            ->middleware('throttle:invitations')
             ->name('invitations.accept');
         Route::post('invitations/{token}/decline', [InvitationController::class, 'decline'])
+            ->middleware('throttle:invitations')
             ->name('invitations.decline');
 
         Route::post('organizations/{organization}/invitations', [InvitationController::class, 'store'])
+            ->middleware('throttle:invitations')
             ->name('organizations.invitations.store');
         Route::delete('organizations/{organization}/invitations/{invitation}', [InvitationController::class, 'destroy'])
+            ->middleware('throttle:invitations')
             ->name('organizations.invitations.destroy');
     });

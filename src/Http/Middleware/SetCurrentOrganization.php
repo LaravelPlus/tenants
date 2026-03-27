@@ -7,12 +7,14 @@ namespace LaravelPlus\Tenants\Http\Middleware;
 use Closure;
 use Illuminate\Http\Request;
 use LaravelPlus\Tenants\Contracts\OrganizationRepositoryInterface;
+use LaravelPlus\Tenants\Support\CurrentOrganizationResolver;
 use Symfony\Component\HttpFoundation\Response;
 
 final class SetCurrentOrganization
 {
     public function __construct(
         private readonly OrganizationRepositoryInterface $repository,
+        private readonly CurrentOrganizationResolver $resolver,
     ) {}
 
     public function handle(Request $request, Closure $next): Response
@@ -43,7 +45,7 @@ final class SetCurrentOrganization
         }
 
         if ($organization && $organization->hasMember($user)) {
-            session()->put('current_organization_id', $organization->id);
+            $this->resolver->set($organization->id);
             $this->setTeamId($organization->id);
 
             return;
@@ -54,32 +56,33 @@ final class SetCurrentOrganization
 
     private function resolveFromSession($user): void
     {
-        $organizationId = session('current_organization_id');
+        // Eager load all user organizations in a single query
+        $userOrganizations = $user->organizations()
+            ->select('organizations.id', 'organizations.name', 'organizations.slug', 'organizations.is_personal', 'organizations.owner_id')
+            ->get();
+
+        $organizationId = $this->resolver->id();
 
         if ($organizationId) {
-            $organization = $this->repository->find($organizationId);
+            $organization = $userOrganizations->firstWhere('id', $organizationId);
 
-            if ($organization && $organization->hasMember($user)) {
+            if ($organization) {
                 $this->setTeamId($organization->id);
 
                 return;
             }
         }
 
-        $personal = $this->repository->personalForUser($user->id);
+        // Fallback: find personal org from already-loaded collection
+        $personal = $userOrganizations->first(fn ($org) => $org->is_personal && $org->owner_id === $user->id);
 
-        if ($personal) {
-            session()->put('current_organization_id', $personal->id);
-            $this->setTeamId($personal->id);
-
-            return;
+        if (!$personal) {
+            $personal = $userOrganizations->first();
         }
 
-        $first = $user->organizations()->first();
-
-        if ($first) {
-            session()->put('current_organization_id', $first->id);
-            $this->setTeamId($first->id);
+        if ($personal) {
+            $this->resolver->set($personal->id);
+            $this->setTeamId($personal->id);
         }
     }
 

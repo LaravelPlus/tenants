@@ -7,6 +7,7 @@ namespace LaravelPlus\Tenants\Traits;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use LaravelPlus\Tenants\Models\Organization;
 use LaravelPlus\Tenants\Scopes\OrganizationScope;
+use LaravelPlus\Tenants\Support\CurrentOrganizationResolver;
 
 trait BelongsToOrganization
 {
@@ -16,7 +17,7 @@ trait BelongsToOrganization
 
         static::creating(function ($model): void {
             if (!$model->organization_id) {
-                $model->organization_id = session('current_organization_id');
+                $model->organization_id = app(CurrentOrganizationResolver::class)->id();
             }
         });
     }

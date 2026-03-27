@@ -7,10 +7,15 @@ namespace LaravelPlus\Tenants\Traits;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use LaravelPlus\Tenants\Models\Organization;
+use LaravelPlus\Tenants\Support\CurrentOrganizationResolver;
 use RuntimeException;
 
 trait HasOrganizations
 {
+    private ?Organization $resolvedCurrentOrganization = null;
+
+    private bool $currentOrganizationResolved = false;
+
     public function organizations(): BelongsToMany
     {
         return $this->belongsToMany(Organization::class, 'organization_members')
@@ -32,13 +37,28 @@ trait HasOrganizations
 
     public function currentOrganization(): ?Organization
     {
-        $organizationId = session('current_organization_id');
-
-        if ($organizationId) {
-            return $this->organizations()->where('organizations.id', $organizationId)->first();
+        if ($this->currentOrganizationResolved) {
+            return $this->resolvedCurrentOrganization;
         }
 
-        return $this->personalOrganization() ?? $this->organizations()->first();
+        $organizationId = app(CurrentOrganizationResolver::class)->id();
+
+        if ($organizationId) {
+            $organization = $this->organizations()->where('organizations.id', $organizationId)->first();
+        } else {
+            $organization = $this->personalOrganization() ?? $this->organizations()->first();
+        }
+
+        $this->resolvedCurrentOrganization = $organization;
+        $this->currentOrganizationResolved = true;
+
+        return $organization;
+    }
+
+    public function clearCurrentOrganizationCache(): void
+    {
+        $this->resolvedCurrentOrganization = null;
+        $this->currentOrganizationResolved = false;
     }
 
     public function switchOrganization(Organization $organization): void
@@ -47,7 +67,8 @@ trait HasOrganizations
             throw new RuntimeException('User is not a member of this organization.');
         }
 
-        session()->put('current_organization_id', $organization->id);
+        app(CurrentOrganizationResolver::class)->set($organization->id);
+        $this->clearCurrentOrganizationCache();
 
         if (function_exists('setPermissionsTeamId')) {
             setPermissionsTeamId($organization->id);
