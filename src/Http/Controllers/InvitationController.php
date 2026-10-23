@@ -19,11 +19,23 @@ final class InvitationController
         private(set) InvitationService $invitationService,
     ) {}
 
-    public function show(string $token): Response|RedirectResponse
+    /** Invitation addressed to the logged-in user, 404 otherwise. */
+    private function findForUser(Request $request, string $token): OrganizationInvitation
     {
-        $invitation = OrganizationInvitation::where('token', $token)
-            ->with('organization')
-            ->firstOrFail();
+        $invitation = OrganizationInvitation::where('token', $token)->firstOrFail();
+
+        abort_unless(
+            strcasecmp((string) $request->user()?->email, $invitation->email) === 0,
+            404,
+        );
+
+        return $invitation;
+    }
+
+    public function show(Request $request, string $token): Response|RedirectResponse
+    {
+        $invitation = $this->findForUser($request, $token);
+        $invitation->load('organization');
 
         if (!$invitation->isPending()) {
             return redirect()->route('dashboard')
@@ -45,17 +57,17 @@ final class InvitationController
 
     public function accept(Request $request, string $token): RedirectResponse
     {
-        $invitation = OrganizationInvitation::where('token', $token)->firstOrFail();
+        $invitation = $this->findForUser($request, $token);
 
-        $this->invitationService->accept($invitation);
+        $this->invitationService->accept($invitation, $request->user());
 
         return redirect()->route('dashboard')
             ->with('status', 'You have joined '.$invitation->organization->name.'.');
     }
 
-    public function decline(string $token): RedirectResponse
+    public function decline(Request $request, string $token): RedirectResponse
     {
-        $invitation = OrganizationInvitation::where('token', $token)->firstOrFail();
+        $invitation = $this->findForUser($request, $token);
 
         $this->invitationService->decline($invitation);
 
@@ -77,8 +89,13 @@ final class InvitationController
         return back()->with('status', 'Invitation sent successfully.');
     }
 
-    public function destroy(Organization $organization, OrganizationInvitation $invitation): RedirectResponse
+    public function destroy(Request $request, Organization $organization, OrganizationInvitation $invitation): RedirectResponse
     {
+        abort_unless(
+            $invitation->organization_id === $organization->id && $request->user()->isOrganizationAdmin($organization),
+            404,
+        );
+
         $this->invitationService->cancel($invitation);
 
         return back()->with('status', 'Invitation cancelled.');

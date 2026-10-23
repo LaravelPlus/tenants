@@ -14,8 +14,12 @@ final class OrganizationScope implements Scope
     {
         $organizationId = session('current_organization_id');
 
+        // Fail closed: no current organization means no rows. System code
+        // (jobs, console) opts out with ->withoutGlobalScope(OrganizationScope::class).
         if ($organizationId) {
             $builder->where($model->getTable().'.organization_id', $organizationId);
+        } else {
+            $builder->whereRaw('1 = 0');
         }
     }
 }

@@ -8,6 +8,7 @@ use App\Models\User;
 use Illuminate\Pagination\LengthAwarePaginator;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
+use Illuminate\Validation\ValidationException;
 use LaravelPlus\Tenants\Contracts\OrganizationRepositoryInterface;
 use LaravelPlus\Tenants\Contracts\OrganizationServiceInterface;
 use LaravelPlus\Tenants\Events\MemberAdded;
@@ -41,6 +42,10 @@ final class OrganizationService implements OrganizationServiceInterface
 
     public function create(array $data, ?int $ownerId = null): Organization
     {
+        if ($ownerId && empty($data['is_personal'])) {
+            $this->assertUnderOrganizationLimit($ownerId);
+        }
+
         return DB::transaction(function () use ($data, $ownerId): Organization {
             $data['owner_id'] = $ownerId;
 
@@ -58,6 +63,15 @@ final class OrganizationService implements OrganizationServiceInterface
 
             return $organization;
         });
+    }
+
+    private function assertUnderOrganizationLimit(int $ownerId): void
+    {
+        $max = (int) app(TenantSettingsService::class)->getAll()['max_organizations_per_user'];
+
+        if ($max > 0 && $this->repository->query()->where('owner_id', $ownerId)->where('is_personal', false)->count() >= $max) {
+            throw ValidationException::withMessages(['name' => 'You have reached the maximum number of organizations.']);
+        }
     }
 
     public function update(Organization $organization, array $data): Organization
@@ -105,6 +119,10 @@ final class OrganizationService implements OrganizationServiceInterface
     {
         $user = User::findOrFail($userId);
         $organization->removeMember($user);
+
+        if (auth()->id() === $user->id && (int) session('current_organization_id') === $organization->id) {
+            session()->forget('current_organization_id');
+        }
 
         event(new MemberRemoved($organization, $user));
     }

@@ -38,6 +38,7 @@ abstract class TestCase extends OrchestraTestCase
 
         $app['config']->set('auth.providers.users.model', User::class);
 
+        $app['config']->set('app.key', 'base64:'.base64_encode(str_repeat('a', 32)));
         $app['config']->set('permission.testing', true);
 
         $app['config']->set('view.paths', [__DIR__ . '/resources/views']);
@@ -55,6 +56,7 @@ abstract class TestCase extends OrchestraTestCase
     protected function defineRoutes($router): void
     {
         Route::get('/login', fn () => 'login')->name('login');
+        Route::get('/dashboard', fn () => 'dashboard')->name('dashboard');
     }
 
     protected function defineDatabaseMigrations(): void

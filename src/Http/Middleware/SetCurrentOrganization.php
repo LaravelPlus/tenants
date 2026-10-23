@@ -80,7 +80,12 @@ final class SetCurrentOrganization
         if ($first) {
             session()->put('current_organization_id', $first->id);
             $this->setTeamId($first->id);
+
+            return;
         }
+
+        // No valid organization left (e.g. removed from the last one): drop the stale id.
+        session()->forget('current_organization_id');
     }
 
     private function setTeamId(int $organizationId): void

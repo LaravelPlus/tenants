@@ -117,6 +117,8 @@ class Project extends Model
 Project::all(); // only returns projects for the active org
 ```
 
+The scope fails closed: with no current organization (queued jobs, console, users without an org) queries return no rows and creating a record without `organization_id` throws. System code opts out explicitly with `Project::withoutGlobalScope(\LaravelPlus\Tenants\Scopes\OrganizationScope::class)` and sets `organization_id` itself.
+
 ### Invitations
 
 ```php
