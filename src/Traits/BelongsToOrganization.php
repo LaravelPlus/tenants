@@ -7,6 +7,7 @@ namespace LaravelPlus\Tenants\Traits;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use LaravelPlus\Tenants\Models\Organization;
 use LaravelPlus\Tenants\Scopes\OrganizationScope;
+use RuntimeException;
 
 trait BelongsToOrganization
 {
@@ -17,6 +18,10 @@ trait BelongsToOrganization
         static::creating(function ($model): void {
             if (!$model->organization_id) {
                 $model->organization_id = session('current_organization_id');
+            }
+
+            if (!$model->organization_id) {
+                throw new RuntimeException('No current organization: set organization_id explicitly when creating '.$model::class.' outside a request.');
             }
         });
     }

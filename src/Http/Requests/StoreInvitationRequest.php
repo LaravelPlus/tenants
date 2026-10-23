@@ -10,7 +10,12 @@ final class StoreInvitationRequest extends FormRequest
 {
     public function authorize(): bool
     {
-        return true;
+        return $this->user()?->isOrganizationAdmin($this->route('organization')) ?? false;
+    }
+
+    protected function failedAuthorization(): never
+    {
+        abort(404);
     }
 
     /**

@@ -7,6 +7,7 @@ namespace LaravelPlus\Tenants\Services;
 use App\Models\User;
 use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Facades\Notification;
+use Illuminate\Support\Str;
 use LaravelPlus\Tenants\Events\InvitationAccepted;
 use LaravelPlus\Tenants\Events\InvitationDeclined;
 use LaravelPlus\Tenants\Events\InvitationSent;
@@ -32,12 +33,19 @@ final class InvitationService
             throw new RuntimeException('An active invitation already exists for this email.');
         }
 
-        $invitation = $organization->invitations()->create([
-            'email' => $email,
+        // (organization_id, email) is unique: reuse a declined/expired/accepted row instead of inserting.
+        $invitation = $organization->invitations()->firstOrNew(['email' => $email]);
+        $invitation->fill([
             'role' => $role,
             'invited_by' => $invitedById,
+            'accepted_at' => null,
+            'declined_at' => null,
             'expires_at' => now()->addHours((int) config('tenants.invitation_expiry_hours', 72)),
         ]);
+        if ($invitation->exists) {
+            $invitation->token = Str::random(40);
+        }
+        $invitation->save();
 
         Mail::to($email)->send(new OrganizationInvitationMail($invitation));
 
@@ -51,7 +59,7 @@ final class InvitationService
         return $invitation;
     }
 
-    public function accept(OrganizationInvitation $invitation): void
+    public function accept(OrganizationInvitation $invitation, ?User $user = null): void
     {
         if ($invitation->isExpired()) {
             throw new RuntimeException('This invitation has expired.');
@@ -61,7 +69,7 @@ final class InvitationService
             throw new RuntimeException('This invitation is no longer pending.');
         }
 
-        $user = User::where('email', $invitation->email)->firstOrFail();
+        $user ??= User::where('email', $invitation->email)->firstOrFail();
 
         $invitation->accept();
         $invitation->organization->addMember($user, $invitation->role);
